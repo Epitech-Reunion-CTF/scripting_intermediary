@@ -1,80 +1,63 @@
 #!/bin/python3
 
-from socket import socket, AF_INET, SOCK_STREAM
-import random
-import sys
+import socket
 import select
+import threading
+import random
+import time
 
-if (len(sys.argv) != 2):
-    print("Usage: python3 intermediary.py <port>")
-    sys.exit(1)
-
-PUBLIC_PORT =   int(sys.argv[1])
-HOST        =   'localhost'
-MAX_CLIENTS =   1024
+LOCALHOST = "localhost"
+PORT = 4243
 
 class Server:
     def __init__(self):
-        self.socket = socket(AF_INET, SOCK_STREAM)
-        self.inputs = [self.socket]
-        self.outputs = []
-        self.msg_queues = {}
-        self._all_clients = {}
+        self._client_lists = []
+        self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._ports_list = []
+        self._port = PORT
+
+
+    def _run_another_server(self, client_socket, ports_lists, port_left=0):
+        print("Number of connection: {}".format(port_left))
+        client_socket.send(str(ports_lists[port_left]).encode())
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.bind((LOCALHOST, ports_lists[port_left]))
+
+        server.listen()
+        client, addr = server.accept()
+        if (port_left == 9):
+            client.send("Here's the flag :)\nEPICTF{1nt3rm3d14ry_1s_4w3s0m3}".encode())
+            client.close()
+            server.close()
+            return
+        self._run_another_server(client, ports_lists, port_left + 1)
+
+
+    def _generate_port(self):
+        port = 0
+        ports_lists = []
+        for i in range(0, 10):
+            port = random.randint(10000, 65535)
+            if not port in self._ports_list:
+                ports_lists.append(port)
+        return ports_lists
 
     def run(self):
-        self.bind()
-        self.listen()
-        while (self.inputs):
-            print("Waiting for a client to connect on the port {}...".format(PUBLIC_PORT))
-            readable, writeable, exceptional = select.select(self.inputs, self.outputs, self.inputs)
-            self.read(readable)
-            self.write(writeable)
-
-    def generate_ports(self):
-        ports = []
-        for i in range(0, 10):
-            ports.append(random.randint(1024, 65535))
-        return ports
-
-    def write(self, writeable):
-        for s in writeable:
-            try:
-                next_msg = self.msg_queues[s].get_nowait()
-            except Queue.Empty:
-                self.outputs.remove(s)
-            else:
-                s.send(next_msg)
-
-    def read(self, readable):
-        for s in readable:
-            if s is self.socket:
-                connection, client_address = s.accept()
-                connection.setblocking(0)
-                self.inputs.append(connection)
-                self._all_clients[connection] = self.generate_ports()
-                print("All ports available for the client {}: {}".format(client_address, self._all_clients[connection]))
-
-            else:
-                data = s.recv(1024)
-                if data:
-                    print("Received data from the client {}: {}".format(s.getpeername(), data.decode()))
-                    if (data.decode() == "exit"):
-                        self.inputs.remove(s)
-                        s.close()
-                else:
-                    self.inputs.remove(s)
-                    s.close()
-    def bind(self):
-        self.socket.bind((HOST, PUBLIC_PORT))
-
-    def listen(self):
-        self.socket.listen(MAX_CLIENTS)
+        self._server_socket.bind((LOCALHOST, self._port))
+        self._server_socket.listen()
+        while True:
+            print("Waiting for new connections...")
+            read_socket, write_socket, exception_socket = select.select([self._server_socket], [], [], 2)
+            for socks in read_socket:
+                if (socks == self._server_socket):
+                    client_socket, client_address = self._server_socket.accept()
+                    print("New connection from {}".format(client_address))
+                    self._client_lists.append(client_socket)
+                    self._ports_list.append(self._generate_port())
+                    thread = threading.Thread(target=self._run_another_server, args=(client_socket, self._ports_list[-1]))
+                    thread.start()
 
 
 if __name__ == "__main__":
     server = Server()
-    try:
-        server.run()
-    except KeyboardInterrupt:
-        print("Closing the server...")
-        sys.exit(0)
+    server.run()

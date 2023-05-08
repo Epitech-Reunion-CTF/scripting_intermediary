@@ -11,13 +11,24 @@ PORT = sys.argv[1]
 
 s = socket()
 s.connect(("localhost", int(PORT)))
+print("Connected to server")
 
-while True:
-    msg = input("Enter message: ")
-    s.send(msg.encode())
-    if msg == "exit":
-        break
-    print("Message sent.")
+try:
+    for nb in range(10):
+        port = s.recv(1024).decode()
+        if not port.isdigit():
+            print("Error: received port is not a number")
+            exit(0)
+        port = int(port)
+        print("Received port: " + str(port))
+        s.close()
+        s = socket()
+        s.connect(("localhost", port))
+        print("Connected to server")
+except ConnectionRefusedError:
+    print("{} is not available".format(port))
+    exit(0)
 
+print(s.recv(1024).decode())
 s.close()
 
