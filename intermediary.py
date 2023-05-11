@@ -57,7 +57,10 @@ class Server:
                     thread = threading.Thread(target=self._run_another_server, args=(client_socket, self._ports_list[-1]))
                     thread.start()
 
+    def close(self):
+        self._server_socket.close()
 
 if __name__ == "__main__":
     server = Server()
     server.run()
+    server.close()
