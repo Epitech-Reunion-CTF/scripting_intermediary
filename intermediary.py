@@ -17,9 +17,14 @@ class Server:
         self._port = PORT
 
 
-    def _run_another_server(self, client_socket, ports_lists, port_left=0):
+    def _run_another_server(self, client_socket, ports_lists, port_left=0, is_binded=False):
         print("Number of connection: {}".format(port_left))
-        client_socket.send(str(ports_lists[port_left]).encode())
+        if (not is_binded):
+            client_socket.send(str(ports_lists[port_left]).encode())
+        else:
+            client_socket.close()
+        if (port_left > 0):
+            client_socket.close()
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server.bind((LOCALHOST, ports_lists[port_left]))
 
@@ -30,7 +35,8 @@ class Server:
             client.close()
             server.close()
             return
-        self._run_another_server(client, ports_lists, port_left + 1)
+        client.send(str(ports_lists[port_left]).encode())
+        self._run_another_server(client, ports_lists, port_left + 1, True)
 
 
     def _generate_port(self):
@@ -43,19 +49,26 @@ class Server:
         return ports_lists
 
     def run(self):
-        self._server_socket.bind((LOCALHOST, self._port))
-        self._server_socket.listen()
-        while True:
-            print("Waiting for new connections...")
-            read_socket, write_socket, exception_socket = select.select([self._server_socket], [], [], 2)
-            for socks in read_socket:
-                if (socks == self._server_socket):
-                    client_socket, client_address = self._server_socket.accept()
-                    print("New connection from {}".format(client_address))
-                    self._client_lists.append(client_socket)
-                    self._ports_list.append(self._generate_port())
-                    thread = threading.Thread(target=self._run_another_server, args=(client_socket, self._ports_list[-1]))
-                    thread.start()
+        try:
+            self._server_socket.bind((LOCALHOST, self._port))
+            self._server_socket.listen()
+            while True:
+                print("Waiting for new connections...")
+                read_socket, write_socket, exception_socket = select.select([self._server_socket], [], [], 2)
+                for socks in read_socket:
+                    if (socks == self._server_socket):
+                        client_socket, client_address = self._server_socket.accept()
+                        print("New connection from {}".format(client_address))
+                        self._client_lists.append(client_socket)
+                        self._ports_list.append(self._generate_port())
+                        thread = threading.Thread(target=self._run_another_server, args=(client_socket, self._ports_list[-1]))
+                        thread.start()
+        except KeyboardInterrupt:
+            print("The server is closing...")
+            for client in self._client_lists:
+                client.close()
+            self._server_socket.close()
+            print("The server is closed")
 
     def close(self):
         self._server_socket.close()

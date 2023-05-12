@@ -25,8 +25,9 @@ try:
         s = socket()
         s.connect(("localhost", port))
         print("Connected to server")
-except ConnectionRefusedError:
+except ConnectionRefusedError as e:
     print("{} is not available".format(port))
+    print(e)
     exit(0)
 
 print(s.recv(1024).decode())
